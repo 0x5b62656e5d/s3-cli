@@ -9,7 +9,7 @@ use crate::{
     files::{
         delete::delete_file, download::download_file, list_files::list_files, upload::upload_file,
     },
-    multipart::delete::delete_multipart_upload,
+    multipart::delete::{delete_all_multipart_uploads, delete_multipart_upload},
     util::get_bucket_region,
 };
 use anyhow::{Result, bail};
@@ -166,6 +166,7 @@ async fn main() -> Result<()> {
         Commands::Multipart { commands } => match commands {
             MultpartCommands::Delete {
                 bucket,
+                all,
                 key,
                 timestamp_id,
             } => {
@@ -175,7 +176,12 @@ async fn main() -> Result<()> {
                 )
                 .await?;
 
-                delete_multipart_upload(&client, bucket, key, timestamp_id).await?;
+                if all {
+                    delete_all_multipart_uploads(&client, bucket).await?;
+                } else {
+                    delete_multipart_upload(&client, bucket, key.unwrap(), timestamp_id.unwrap())
+                        .await?;
+                }
             }
             MultpartCommands::List { bucket } => {
                 let client: Client = build_client(
