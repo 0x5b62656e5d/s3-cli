@@ -25,14 +25,19 @@ pub async fn delete_multipart_upload(
         return Ok(());
     }
 
-    let upload_id = res.uploads.unwrap().iter().filter(|u: &&aws_sdk_s3::types::MultipartUpload| {
+    let upload_id = res.uploads.unwrap().iter().find_map(|u: &aws_sdk_s3::types::MultipartUpload| {
         let timestamp =
-                DateTime::from_timestamp_millis(u.initiated().unwrap().to_millis().unwrap())
-                    .unwrap()
-                    .with_timezone(&Local).timestamp_millis();
+            DateTime::from_timestamp_millis(u.initiated().unwrap().to_millis().unwrap())
+                .unwrap()
+                .with_timezone(&Local)
+                .timestamp_millis();
 
-        timestamp == timestamp_id.parse::<i64>().unwrap()
-    }).next().map(|u| u.upload_id.clone());
+        if timestamp == timestamp_id.parse::<i64>().unwrap() && u.key().unwrap() == key {
+            Some(u.upload_id.clone())
+        } else {
+            None
+        }
+    });
 
     if upload_id.is_none() {
         return Ok(());
@@ -41,13 +46,14 @@ pub async fn delete_multipart_upload(
     if upload_id.as_ref().unwrap().is_none() {
         return Ok(());
     }
-    
-    client.abort_multipart_upload()
+
+    client
+        .abort_multipart_upload()
         .bucket(bucket)
         .key(key)
         .upload_id(upload_id.unwrap().unwrap())
         .send()
         .await?;
-    
+
     Ok(())
 }
