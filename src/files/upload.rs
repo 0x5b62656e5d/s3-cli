@@ -1,26 +1,48 @@
 use anyhow::bail;
 use aws_sdk_s3::{
     Client,
-    operation::create_multipart_upload::CreateMultipartUploadOutput,
+    operation::{
+        create_multipart_upload::CreateMultipartUploadOutput, upload_part::UploadPartOutput,
+    },
     primitives::{ByteStream, Length},
     types::{CompletedMultipartUpload, CompletedPart},
 };
 use std::{
     fs,
     io::{Write, stdout},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
     time::Duration,
 };
-use tokio::time::interval;
+use tokio::{
+    sync::{Mutex, MutexGuard},
+    task::JoinSet,
+    time::{Interval, interval},
+};
 use tree_magic::from_u8;
 
-const CHUNK_SIZE: u64 = 1024 * 1024 * 10; // 10 MB
+const CHUNK_SIZE: u64 = 1024 * 1024 * 8; // 8 MB
 const MAX_CHUNKS: u64 = 10000;
+const MAX_CONCURRENCY: usize = 32;
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+struct SharedState {
+    uploaded_bytes_total: AtomicU64,
+    uploaded_bytes_window: AtomicU64,
+    active_uploads: AtomicUsize,
+    next_chunk_idx: AtomicU64,
+    target_concurrency: AtomicUsize,
+    stop_flag: AtomicBool,
+    uploaded_parts: Mutex<Vec<CompletedPart>>,
+    client: Client,
+    bucket: String,
+    key: String,
+    upload_id: String,
+    path: PathBuf,
+}
 
 /// Uploads a file to an S3 bucket at the specified key (path).
 /// # Arguments
@@ -38,7 +60,7 @@ pub async fn upload_file(
 ) -> Result<(), anyhow::Error> {
     let path: &Path = Path::new(&file_path);
 
-    let file_size = tokio::fs::metadata(path)
+    let file_size: u64 = tokio::fs::metadata(path)
         .await
         .expect("Failed to get file metadata")
         .len();
@@ -62,6 +84,20 @@ pub async fn upload_file(
         return Ok(());
     }
 
+    let mut chunk_count: u64 = (file_size / CHUNK_SIZE) + 1;
+    let mut prev_chunk_size: u64 = file_size % CHUNK_SIZE;
+    if prev_chunk_size == 0 {
+        prev_chunk_size = CHUNK_SIZE;
+        chunk_count -= 1;
+    }
+
+    if chunk_count > MAX_CHUNKS {
+        bail!(
+            "File is too large to upload. Maximum number of chunks is {}",
+            MAX_CHUNKS
+        );
+    }
+
     let multipart_upload_res: CreateMultipartUploadOutput = client
         .create_multipart_upload()
         .bucket(&bucket)
@@ -73,101 +109,72 @@ pub async fn upload_file(
         anyhow::anyhow!("Failed to initiate multipart upload: No upload ID returned")
     })?;
 
-    let mut chunk_count = (file_size / CHUNK_SIZE) + 1;
-    let mut size_of_last_chunk = file_size % CHUNK_SIZE;
-    if size_of_last_chunk == 0 {
-        size_of_last_chunk = CHUNK_SIZE;
-        chunk_count -= 1;
+    let state: Arc<SharedState> = Arc::new(SharedState {
+        uploaded_bytes_total: AtomicU64::new(0),
+        uploaded_bytes_window: AtomicU64::new(0),
+        active_uploads: AtomicUsize::new(0),
+        next_chunk_idx: AtomicU64::new(0),
+        target_concurrency: AtomicUsize::new(4),
+        stop_flag: AtomicBool::new(false),
+        uploaded_parts: Mutex::new(Vec::new()),
+        client: client.clone(),
+        bucket: bucket.to_string(),
+        key: key.to_string(),
+        upload_id: upload_id.to_string(),
+        path: path.to_path_buf(),
+    });
+
+    let file_size_spinner_task: u64 = file_size;
+    let state_spinner_task: Arc<SharedState> = Arc::clone(&state);
+
+    let spinner_task: tokio::task::JoinHandle<()> =
+        spawn_progress_task(state_spinner_task, file_size_spinner_task);
+
+    let controller_handle: tokio::task::JoinHandle<()> =
+        spawn_controller(state.clone(), MAX_CONCURRENCY, file_size);
+
+    let scheduler_result: Result<(), anyhow::Error> =
+        run_scheduler(chunk_count, prev_chunk_size, state.clone()).await;
+    state.stop_flag.store(true, Ordering::Relaxed);
+    let _ = spinner_task.await;
+    let _ = controller_handle.await;
+
+    println!();
+
+    if let Err(e) = scheduler_result {
+        let _ = client
+            .abort_multipart_upload()
+            .bucket(&bucket)
+            .key(&key)
+            .upload_id(upload_id)
+            .send()
+            .await;
+
+        bail!("Upload failed: {}", e);
     }
 
-    if chunk_count > MAX_CHUNKS {
+    let mut parts: tokio::sync::MutexGuard<'_, Vec<CompletedPart>> =
+        state.uploaded_parts.lock().await;
+    parts.sort_by_key(|part| part.part_number);
+
+    if parts.len() as u64 != chunk_count {
+        let _ = client
+            .abort_multipart_upload()
+            .bucket(&bucket)
+            .key(&key)
+            .upload_id(upload_id)
+            .send()
+            .await;
+
         bail!(
-            "File is too large to upload. Maximum number of chunks is {}",
-            MAX_CHUNKS
+            "Upload failed: Expected {} parts but got {}",
+            chunk_count,
+            parts.len()
         );
     }
 
-    let mut upload_parts: Vec<aws_sdk_s3::types::CompletedPart> = Vec::new();
-
-    let is_uploading = Arc::new(AtomicBool::new(true));
-    let is_uploading_task = Arc::clone(&is_uploading);
-
-    let spinner_progress = Arc::new(AtomicU64::new(0));
-    let spinner_progress_task = Arc::clone(&spinner_progress);
-
-    let task = tokio::spawn(async move {
-        let mut ticker = interval(Duration::from_millis(100));
-        let mut frame_idx: usize = 0;
-
-        loop {
-            ticker.tick().await;
-            let progress = spinner_progress_task.load(Ordering::Relaxed);
-
-            print!(
-                "\r{}% {}",
-                (progress) * 100 / chunk_count,
-                SPINNER_FRAMES[frame_idx]
-            );
-            stdout().flush().unwrap();
-
-            frame_idx += 1;
-
-            if frame_idx >= SPINNER_FRAMES.len() {
-                frame_idx = 0;
-            }
-
-            if chunk_count == progress || !is_uploading_task.load(Ordering::Relaxed) {
-                break;
-            }
-        }
-    });
-
-    let upload_res: Result<(), anyhow::Error> = async {
-        for chunk_index in 0..chunk_count {
-            let this_chunk = if chunk_count - 1 == chunk_index {
-                size_of_last_chunk
-            } else {
-                CHUNK_SIZE
-            };
-            let stream = ByteStream::read_from()
-                .path(path)
-                .offset(chunk_index * CHUNK_SIZE)
-                .length(Length::Exact(this_chunk))
-                .build()
-                .await
-                .unwrap();
-
-            let part_number = (chunk_index as i32) + 1;
-            let upload_part_res = client
-                .upload_part()
-                .key(&key)
-                .bucket(&bucket)
-                .upload_id(upload_id)
-                .body(stream)
-                .part_number(part_number)
-                .send()
-                .await?;
-
-            upload_parts.push(
-                CompletedPart::builder()
-                    .e_tag(upload_part_res.e_tag.unwrap_or_default())
-                    .part_number(part_number)
-                    .build(),
-            );
-
-            spinner_progress.store(chunk_index + 1, Ordering::Relaxed);
-        }
-        Ok(())
-    }
-    .await;
-
-    is_uploading.store(false, Ordering::Relaxed);
-    let _ = task.await;
-
-    upload_res?;
-
     let completed_multipart_upload: CompletedMultipartUpload = CompletedMultipartUpload::builder()
-        .set_parts(Some(upload_parts))
+        .set_parts(Some(parts.clone()))
         .build();
 
     let _ = client
@@ -180,4 +187,289 @@ pub async fn upload_file(
         .await?;
 
     Ok(())
+}
+
+fn spawn_controller(
+    state: Arc<SharedState>,
+    max_concurrency: usize,
+    file_size: u64,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut ticker: Interval = interval(Duration::from_secs(2));
+        let mut smoothed_us_mb_s: f64 = 0.0;
+        let mut prev_diff: i8 = 1;
+        let mut baseline_throughput: Option<f64> = None;
+        let mut cooldown: usize = 0;
+        let mut current_target: usize = state.target_concurrency.load(Ordering::Relaxed);
+        let mut best_target: usize = current_target;
+        let mut best_throughput: f64 = 0.0;
+        let mut prev_target: usize = current_target;
+        let mut stable_windows: usize = 0;
+
+        loop {
+            if state.stop_flag.load(Ordering::Relaxed) {
+                break;
+            }
+
+            ticker.tick().await;
+
+            if cooldown > 0 {
+                cooldown -= 1;
+                continue;
+            }
+
+            if state.uploaded_bytes_total.load(Ordering::Relaxed) * 100 / file_size >= 80 {
+                current_target = best_target;
+                state
+                    .target_concurrency
+                    .store(current_target, Ordering::Relaxed);
+                continue;
+            }
+
+            let window_bytes: u64 = state.uploaded_bytes_window.swap(0, Ordering::Relaxed);
+
+            let instant_us_mb_s: f64 = (window_bytes as f64) / (2.0 * 1024.0 * 1024.0);
+
+            if instant_us_mb_s > 0.0 {
+                if smoothed_us_mb_s == 0.0 {
+                    smoothed_us_mb_s = instant_us_mb_s;
+                } else {
+                    smoothed_us_mb_s = (0.7 * smoothed_us_mb_s) + (0.3 * instant_us_mb_s);
+                }
+            }
+
+            if current_target == prev_target {
+                stable_windows += 1;
+            } else {
+                stable_windows = 0;
+                prev_target = current_target;
+            }
+
+            if state.active_uploads.load(Ordering::Relaxed) >= current_target.saturating_sub(1)
+                && current_target == prev_target
+                && stable_windows >= 2
+                && smoothed_us_mb_s > best_throughput * 1.03
+            {
+                best_throughput = smoothed_us_mb_s;
+                best_target = current_target;
+            }
+
+            if baseline_throughput.is_none() {
+                baseline_throughput = Some(smoothed_us_mb_s);
+                current_target = (current_target + 1).min(max_concurrency);
+                state
+                    .target_concurrency
+                    .store(current_target, Ordering::Relaxed);
+                cooldown = 1;
+                continue;
+            }
+
+            let prev: f64 = baseline_throughput.unwrap();
+
+            let rel_diff: f64 = if prev > 0.0 {
+                (smoothed_us_mb_s - prev) / prev
+            } else {
+                0.0
+            };
+
+            if rel_diff >= 0.05 {
+                current_target = if prev_diff > 0 {
+                    (current_target + 1).min(max_concurrency)
+                } else {
+                    current_target.saturating_sub(1).max(2)
+                };
+
+                baseline_throughput = Some(smoothed_us_mb_s);
+                cooldown = 1;
+            } else if rel_diff <= -0.2 {
+                if smoothed_us_mb_s < best_throughput * 0.90 {
+                    current_target = best_target;
+                    baseline_throughput = Some(best_throughput);
+                    cooldown = 1;
+                    prev_diff = 1; // or keep previous direction, depending on how you want probing to resume
+                } else {
+                    prev_diff = -prev_diff;
+
+                    current_target = if prev_diff > 0 {
+                        (current_target + 1).min(max_concurrency)
+                    } else {
+                        current_target.saturating_sub(1).max(2)
+                    };
+
+                    baseline_throughput = Some(smoothed_us_mb_s);
+                    cooldown = 1;
+                }
+            } else {
+                baseline_throughput = Some(smoothed_us_mb_s);
+            }
+
+            state
+                .target_concurrency
+                .store(current_target, Ordering::Relaxed);
+        }
+    })
+}
+
+async fn run_scheduler(
+    chunk_count: u64,
+    prev_chunk_size: u64,
+    state: Arc<SharedState>,
+) -> Result<(), anyhow::Error> {
+    let mut join_set: JoinSet<Result<(CompletedPart, u64), anyhow::Error>> = JoinSet::new();
+    let mut scheduler_error: Option<anyhow::Error> = None;
+    let mut aborting: bool = false;
+
+    loop {
+        while !aborting
+            && state.active_uploads.load(Ordering::Relaxed)
+                < state.target_concurrency.load(Ordering::Relaxed)
+            && state.next_chunk_idx.load(Ordering::Relaxed) < chunk_count
+        {
+            let chunk_idx: u64 = state.next_chunk_idx.fetch_add(1, Ordering::Relaxed);
+            let chunk_size: u64 = chunk_size_for(chunk_idx, chunk_count, prev_chunk_size);
+
+            state.active_uploads.fetch_add(1, Ordering::Relaxed);
+
+            let state_clone = Arc::clone(&state);
+
+            join_set.spawn(async move {
+                let part_number = (chunk_idx as i32) + 1;
+
+                let completed_part = upload_part(
+                    state_clone,
+                    part_number,
+                    chunk_idx,
+                    chunk_size,
+                )
+                .await?;
+
+                Ok((completed_part, chunk_size))
+            });
+        }
+
+        if state.next_chunk_idx.load(Ordering::Relaxed) >= chunk_count
+            && state.active_uploads.load(Ordering::Relaxed) == 0
+        {
+            break;
+        }
+
+        if let Some(result) = join_set.join_next().await {
+            state.active_uploads.fetch_sub(1, Ordering::Relaxed);
+
+            match result {
+                Ok(Ok((completed_part, bytes_uploaded))) => {
+                    if !aborting {
+                        {
+                            let mut parts: MutexGuard<'_, Vec<CompletedPart>> =
+                                state.uploaded_parts.lock().await;
+                            parts.push(completed_part);
+                        }
+                        state
+                            .uploaded_bytes_total
+                            .fetch_add(bytes_uploaded, Ordering::Relaxed);
+                        state
+                            .uploaded_bytes_window
+                            .fetch_add(bytes_uploaded, Ordering::Relaxed);
+                    }
+                }
+                Ok(Err(e)) => {
+                    if !aborting {
+                        aborting = true;
+                        scheduler_error = Some(anyhow::anyhow!("Upload part failed: {}", e));
+                        join_set.abort_all();
+                    }
+                }
+                Err(join_error) => {
+                    if !aborting {
+                        aborting = true;
+                        scheduler_error = Some(anyhow::anyhow!("Task join error: {}", join_error));
+                        join_set.abort_all();
+                    }
+                }
+            }
+        }
+    }
+
+    state.active_uploads.store(0, Ordering::Relaxed);
+
+    if let Some(error) = scheduler_error {
+        bail!("Upload failed: {}", error);
+    }
+
+    Ok(())
+}
+
+async fn upload_part(
+    state: Arc<SharedState>,
+    part_number: i32,
+    chunk_idx: u64,
+    chunk_size: u64,
+) -> Result<CompletedPart, anyhow::Error> {
+    let stream: ByteStream = ByteStream::read_from()
+        .path(state.path.clone())
+        .offset(chunk_idx * CHUNK_SIZE)
+        .length(Length::Exact(chunk_size))
+        .build()
+        .await?;
+
+    let upload_part_res: UploadPartOutput = state.client
+        .upload_part()
+        .key(state.key.clone())
+        .bucket(state.bucket.clone())
+        .upload_id(state.upload_id.clone())
+        .body(stream)
+        .part_number(part_number)
+        .send()
+        .await?;
+
+    Ok(CompletedPart::builder()
+        .e_tag(upload_part_res.e_tag.unwrap_or_default())
+        .part_number(part_number)
+        .build())
+}
+
+fn spawn_progress_task(
+    state_spinner_task: Arc<SharedState>,
+    file_size_spinner_task: u64,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut ticker: Interval = interval(Duration::from_millis(100));
+        let mut frame_idx: usize = 0;
+
+        loop {
+            ticker.tick().await;
+
+            print!(
+                "\r{}% {}",
+                state_spinner_task
+                    .uploaded_bytes_total
+                    .load(Ordering::Relaxed)
+                    * 100
+                    / file_size_spinner_task,
+                SPINNER_FRAMES[frame_idx],
+            );
+
+            if let Err(e) = stdout().flush() {
+                eprintln!("Failed to flush stdout: {}", e);
+            }
+
+            frame_idx += 1;
+
+            if frame_idx >= SPINNER_FRAMES.len() {
+                frame_idx = 0;
+            }
+
+            if state_spinner_task.stop_flag.load(Ordering::Relaxed) {
+                break;
+            }
+        }
+    })
+}
+
+fn chunk_size_for(chunk_index: u64, chunk_count: u64, prev_chunk_size: u64) -> u64 {
+    if chunk_index == chunk_count - 1 {
+        prev_chunk_size
+    } else {
+        CHUNK_SIZE
+    }
 }
