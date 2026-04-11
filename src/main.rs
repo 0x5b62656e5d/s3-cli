@@ -1,6 +1,6 @@
 use crate::{
     buckets::{create::create_bucket, delete::delete_bucket, list_buckets::list_buckets},
-    cli::{BucketCommands, Cli, Commands, FileCommands},
+    cli::{BucketCommands, Cli, Commands, FileCommands, MultpartCommands},
     client::{
         config::{Config, Regions, get_config, get_regions, init_config},
         init::init_regions,
@@ -9,6 +9,7 @@ use crate::{
     files::{
         delete::delete_file, download::download_file, list_files::list_files, upload::upload_file,
     },
+    multipart::delete::delete_multipart_upload,
     util::get_bucket_region,
 };
 use anyhow::{Result, bail};
@@ -20,6 +21,7 @@ mod buckets;
 mod cli;
 mod client;
 mod files;
+mod multipart;
 mod util;
 
 #[::tokio::main]
@@ -158,6 +160,33 @@ async fn main() -> Result<()> {
                 println!(
                     "Uploaded {:?} successfully",
                     location.split('/').next_back().unwrap().to_string()
+                );
+            }
+        },
+        Commands::Multipart { commands } => match commands {
+            MultpartCommands::Delete {
+                bucket,
+                key,
+                timestamp_id,
+            } => {
+                let client: Client = build_client(
+                    &config.default,
+                    get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
+                )
+                .await?;
+
+                delete_multipart_upload(&client, bucket, key, timestamp_id).await?;
+            }
+            MultpartCommands::List { bucket } => {
+                let client: Client = build_client(
+                    &config.default,
+                    get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
+                )
+                .await?;
+
+                println!(
+                    "{}",
+                    multipart::list::list_multipart_uploads(&client, &bucket).await?
                 );
             }
         },
