@@ -1,11 +1,16 @@
 use crate::{
-    buckets::{create::create_bucket, delete::delete_bucket, list_buckets::list_buckets}, cli::{BucketCommands, Cli, Commands, FileCommands, MultpartCommands}, client::{
+    buckets::{create::create_bucket, delete::delete_bucket, list_buckets::list_buckets},
+    cli::{BucketCommands, Cli, Commands, FileCommands, MultpartCommands},
+    client::{
         config::{Config, Regions, get_config, get_regions, init_config},
         init::init_regions,
         s3_client::build_client,
-    }, files::{
+    },
+    files::{
         delete::delete_file, download::download_file, list_files::list_files, upload::upload_file,
-    }, multipart::delete::delete_multipart_upload, util::get_bucket_region
+    },
+    multipart::delete::delete_multipart_upload,
+    util::get_bucket_region,
 };
 use anyhow::{Result, bail};
 use aws_sdk_s3::Client;
@@ -159,7 +164,11 @@ async fn main() -> Result<()> {
             }
         },
         Commands::Multipart { commands } => match commands {
-            MultpartCommands::Delete { bucket, key, timestamp_id } => {
+            MultpartCommands::Delete {
+                bucket,
+                key,
+                timestamp_id,
+            } => {
                 let client: Client = build_client(
                     &config.default,
                     get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
@@ -167,7 +176,7 @@ async fn main() -> Result<()> {
                 .await?;
 
                 delete_multipart_upload(&client, bucket, key, timestamp_id).await?;
-            },
+            }
             MultpartCommands::List { bucket } => {
                 let client: Client = build_client(
                     &config.default,
@@ -175,7 +184,10 @@ async fn main() -> Result<()> {
                 )
                 .await?;
 
-                println!("{}", multipart::list::list_multipart_uploads(&client, &bucket).await?);
+                println!(
+                    "{}",
+                    multipart::list::list_multipart_uploads(&client, &bucket).await?
+                );
             }
         },
         Commands::Init {} => {

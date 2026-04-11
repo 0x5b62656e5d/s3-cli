@@ -25,19 +25,23 @@ pub async fn delete_multipart_upload(
         return Ok(());
     }
 
-    let upload_id = res.uploads.unwrap().iter().find_map(|u: &aws_sdk_s3::types::MultipartUpload| {
-        let timestamp =
-            DateTime::from_timestamp_millis(u.initiated().unwrap().to_millis().unwrap())
-                .unwrap()
-                .with_timezone(&Local)
-                .timestamp_millis();
+    let upload_id =
+        res.uploads
+            .unwrap()
+            .iter()
+            .find_map(|u: &aws_sdk_s3::types::MultipartUpload| {
+                let timestamp =
+                    DateTime::from_timestamp_millis(u.initiated().unwrap().to_millis().unwrap())
+                        .unwrap()
+                        .with_timezone(&Local)
+                        .timestamp_millis();
 
-        if timestamp == timestamp_id.parse::<i64>().unwrap() && u.key().unwrap() == key {
-            Some(u.upload_id.clone())
-        } else {
-            None
-        }
-    });
+                if timestamp == timestamp_id.parse::<i64>().unwrap() && u.key().unwrap() == key {
+                    Some(u.upload_id.clone())
+                } else {
+                    None
+                }
+            });
 
     if upload_id.is_none() {
         return Ok(());
