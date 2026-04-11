@@ -17,6 +17,10 @@ pub enum Commands {
         #[command(subcommand)]
         commands: FileCommands,
     },
+    Multipart {
+        #[command(subcommand)]
+        commands: MultpartCommands,
+    },
     Init {},
 }
 
@@ -74,5 +78,23 @@ pub enum FileCommands {
 
         #[arg(short, long)]
         override_filename: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum MultpartCommands {
+    Delete {
+        #[arg(required = true)]
+        bucket: String,
+
+        #[arg(required = true)]
+        key: String,
+
+        #[arg(required = true)]
+        timestamp_id: String,
+    },
+    List {
+        #[arg(required = true)]
+        bucket: String,
     },
 }
