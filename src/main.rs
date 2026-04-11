@@ -9,7 +9,7 @@ use crate::{
     files::{
         delete::delete_file, download::download_file, list_files::list_files, upload::upload_file,
     },
-    multipart::delete::delete_multipart_upload,
+    multipart::delete::{delete_all_multipart_uploads, delete_multipart_upload},
     util::get_bucket_region,
 };
 use anyhow::{Result, bail};
@@ -83,12 +83,32 @@ async fn main() -> Result<()> {
 
                 println!("{}", list_files(&client, &bucket).await?);
             }
-            FileCommands::Delete { bucket, key, force } => {
+            FileCommands::Delete {
+                bucket,
+                key,
+                force,
+                yes,
+            } => {
                 let client: Client = build_client(
                     &config.default,
                     get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
                 )
                 .await?;
+
+                if yes {
+                    delete_file(
+                        &client,
+                        bucket,
+                        key.clone(),
+                        !config.default.endpoint_url.contains("cloudflare"),
+                        force,
+                    )
+                    .await?;
+
+                    println!("Deleted {:?} successfully", key.clone());
+
+                    return Ok(());
+                }
 
                 match Confirm::new(&format!(
                     "Are you sure you want to delete the file {:?} from bucket {:?}? (y/n)",
@@ -138,6 +158,7 @@ async fn main() -> Result<()> {
                 bucket,
                 location,
                 override_filename,
+                verbose,
             } => {
                 let client: Client = build_client(
                     &config.default,
@@ -146,13 +167,14 @@ async fn main() -> Result<()> {
                 .await?;
 
                 if let Some(filename) = override_filename {
-                    upload_file(&client, bucket, filename, location.clone()).await?;
+                    upload_file(&client, bucket, filename, location.clone(), verbose).await?;
                 } else {
                     upload_file(
                         &client,
                         bucket,
                         location.clone().split('/').next_back().unwrap().to_string(),
                         location.clone(),
+                        verbose,
                     )
                     .await?;
                 }
@@ -166,6 +188,7 @@ async fn main() -> Result<()> {
         Commands::Multipart { commands } => match commands {
             MultpartCommands::Delete {
                 bucket,
+                all,
                 key,
                 timestamp_id,
             } => {
@@ -175,7 +198,12 @@ async fn main() -> Result<()> {
                 )
                 .await?;
 
-                delete_multipart_upload(&client, bucket, key, timestamp_id).await?;
+                if all {
+                    delete_all_multipart_uploads(&client, bucket).await?;
+                } else {
+                    delete_multipart_upload(&client, bucket, key.unwrap(), timestamp_id.unwrap())
+                        .await?;
+                }
             }
             MultpartCommands::List { bucket } => {
                 let client: Client = build_client(

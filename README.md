@@ -56,16 +56,20 @@ COMMANDS
 
     files list <bucket_name>
         Lists all the files in a bucket
-    files delete <bucket_name> <file_name> [-f | --force]
+    files delete <bucket_name> <file_name> [-f | --force] [-y | --yes]
         Deletes a file in a bucket
         Apply the `-f` or `--force` flag to delete all versions of a file (Not supported for R2)
+        Apply the `-y` or `--yes` flag to bypass confirmation
     files download <bucket_name> <file_key> <download_location> [-o <override_downloaded_filename>]
         Downloads a file from a bucket to a given location (optionally rename it)
-    files upload <bucket_name> <file_location> [-o <override_uploaded_filename>]
+    files upload <bucket_name> <file_location> [-o <override_uploaded_filename>] [-v | --verbose]
         Uploads a file into a bucket (optionally rename it)
+        Apply the `-v` or `--verbose` flag for verbose output
 
     multipart list <bucket_name>
         Lists all multipart uploads in a bucket
     multipart delete <bucket_name> <file_key> <timestamp_id>
         Deletes a multipart upload in a bucket
+    multipart delete <bucket_name> <-a | --all>
+        Deletes all multipart upload in a bucket
 ```

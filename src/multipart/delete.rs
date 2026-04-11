@@ -61,3 +61,36 @@ pub async fn delete_multipart_upload(
 
     Ok(())
 }
+
+/// Deletes all incomplete multipart uploads from an S3 bucket
+/// # Arguments
+/// * `client` - A reference to the S3 client
+/// * `bucket` - The name of the bucket
+/// # Returns
+/// * `Result<(), anyhow::Error>` - `Ok(())` if successful, error if the operation fails
+pub async fn delete_all_multipart_uploads(
+    client: &Client,
+    bucket: String,
+) -> Result<(), anyhow::Error> {
+    let res: ListMultipartUploadsOutput = client
+        .list_multipart_uploads()
+        .bucket(&bucket)
+        .send()
+        .await?;
+
+    if res.uploads.is_none() {
+        return Ok(());
+    }
+
+    for upload in res.uploads.unwrap().iter() {
+        client
+            .abort_multipart_upload()
+            .bucket(bucket.clone())
+            .key(upload.key().unwrap().to_string())
+            .upload_id(upload.upload_id.clone().unwrap())
+            .send()
+            .await?;
+    }
+
+    Ok(())
+}

@@ -55,6 +55,9 @@ pub enum FileCommands {
 
         #[arg(short, long)]
         force: bool,
+
+        #[arg(short, long)]
+        yes: bool,
     },
     Download {
         #[arg(required = true)]
@@ -78,6 +81,9 @@ pub enum FileCommands {
 
         #[arg(short, long)]
         override_filename: Option<String>,
+
+        #[arg(short, long, default_value = "false")]
+        verbose: bool,
     },
 }
 
@@ -87,11 +93,14 @@ pub enum MultpartCommands {
         #[arg(required = true)]
         bucket: String,
 
-        #[arg(required = true)]
-        key: String,
+        #[arg(short, long)]
+        all: bool,
 
-        #[arg(required = true)]
-        timestamp_id: String,
+        #[arg(required_unless_present = "all", conflicts_with = "all")]
+        key: Option<String>,
+
+        #[arg(required_unless_present = "all", conflicts_with = "all")]
+        timestamp_id: Option<String>,
     },
     List {
         #[arg(required = true)]
