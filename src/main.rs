@@ -158,6 +158,7 @@ async fn main() -> Result<()> {
                 bucket,
                 location,
                 override_filename,
+                verbose,
             } => {
                 let client: Client = build_client(
                     &config.default,
@@ -166,13 +167,14 @@ async fn main() -> Result<()> {
                 .await?;
 
                 if let Some(filename) = override_filename {
-                    upload_file(&client, bucket, filename, location.clone()).await?;
+                    upload_file(&client, bucket, filename, location.clone(), verbose).await?;
                 } else {
                     upload_file(
                         &client,
                         bucket,
                         location.clone().split('/').next_back().unwrap().to_string(),
                         location.clone(),
+                        verbose,
                     )
                     .await?;
                 }

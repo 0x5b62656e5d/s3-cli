@@ -15,7 +15,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{
     sync::{Mutex, MutexGuard},
@@ -42,6 +42,7 @@ struct SharedState {
     key: String,
     upload_id: String,
     path: PathBuf,
+    upload_speed_kb: AtomicU64,
 }
 
 /// Uploads a file to an S3 bucket at the specified key (path).
@@ -57,13 +58,19 @@ pub async fn upload_file(
     bucket: String,
     key: String,
     file_path: String,
+    verbose: bool,
 ) -> Result<(), anyhow::Error> {
     let path: &Path = Path::new(&file_path);
+    let start: Instant = Instant::now();
 
     let file_size: u64 = tokio::fs::metadata(path)
         .await
         .expect("Failed to get file metadata")
         .len();
+
+    if verbose {
+        println!("File size: {} bytes", file_size);
+    }
 
     if file_size == 0 {
         bail!("Bad file size.");
@@ -81,6 +88,8 @@ pub async fn upload_file(
             .send()
             .await?;
 
+        println!("Upload completed in {} seconds", start.elapsed().as_secs());
+
         return Ok(());
     }
 
@@ -89,6 +98,10 @@ pub async fn upload_file(
     if prev_chunk_size == 0 {
         prev_chunk_size = CHUNK_SIZE;
         chunk_count -= 1;
+    }
+
+    if verbose {
+        println!("Total chunks: {}", chunk_count);
     }
 
     if chunk_count > MAX_CHUNKS {
@@ -122,13 +135,14 @@ pub async fn upload_file(
         key: key.to_string(),
         upload_id: upload_id.to_string(),
         path: path.to_path_buf(),
+        upload_speed_kb: AtomicU64::new(0),
     });
 
     let file_size_spinner_task: u64 = file_size;
     let state_spinner_task: Arc<SharedState> = Arc::clone(&state);
 
     let spinner_task: tokio::task::JoinHandle<()> =
-        spawn_progress_task(state_spinner_task, file_size_spinner_task);
+        spawn_progress_task(state_spinner_task, file_size_spinner_task, verbose);
 
     let controller_handle: tokio::task::JoinHandle<()> =
         spawn_controller(state.clone(), MAX_CONCURRENCY, file_size);
@@ -186,6 +200,8 @@ pub async fn upload_file(
         .send()
         .await?;
 
+    println!("Upload completed in {} seconds", start.elapsed().as_secs());
+
     Ok(())
 }
 
@@ -237,6 +253,10 @@ fn spawn_controller(
                     smoothed_us_mb_s = (0.7 * smoothed_us_mb_s) + (0.3 * instant_us_mb_s);
                 }
             }
+
+            state
+                .upload_speed_kb
+                .store((smoothed_us_mb_s * 1024.0) as u64, Ordering::Relaxed);
 
             if current_target == prev_target {
                 stable_windows += 1;
@@ -335,13 +355,8 @@ async fn run_scheduler(
             join_set.spawn(async move {
                 let part_number = (chunk_idx as i32) + 1;
 
-                let completed_part = upload_part(
-                    state_clone,
-                    part_number,
-                    chunk_idx,
-                    chunk_size,
-                )
-                .await?;
+                let completed_part =
+                    upload_part(state_clone, part_number, chunk_idx, chunk_size).await?;
 
                 Ok((completed_part, chunk_size))
             });
@@ -412,7 +427,8 @@ async fn upload_part(
         .build()
         .await?;
 
-    let upload_part_res: UploadPartOutput = state.client
+    let upload_part_res: UploadPartOutput = state
+        .client
         .upload_part()
         .key(state.key.clone())
         .bucket(state.bucket.clone())
@@ -431,6 +447,7 @@ async fn upload_part(
 fn spawn_progress_task(
     state_spinner_task: Arc<SharedState>,
     file_size_spinner_task: u64,
+    verbose: bool,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut ticker: Interval = interval(Duration::from_millis(100));
@@ -439,15 +456,32 @@ fn spawn_progress_task(
         loop {
             ticker.tick().await;
 
-            print!(
-                "\r{}% {}",
-                state_spinner_task
-                    .uploaded_bytes_total
-                    .load(Ordering::Relaxed)
-                    * 100
-                    / file_size_spinner_task,
-                SPINNER_FRAMES[frame_idx],
-            );
+            if verbose {
+                print!(
+                    "\r{}% {} - Concurrent uploads: {} - Target concurrency: {} - Upload speed: {:.2} MB/s",
+                    state_spinner_task
+                        .uploaded_bytes_total
+                        .load(Ordering::Relaxed)
+                        * 100
+                        / file_size_spinner_task,
+                    SPINNER_FRAMES[frame_idx],
+                    state_spinner_task.active_uploads.load(Ordering::Relaxed),
+                    state_spinner_task
+                        .target_concurrency
+                        .load(Ordering::Relaxed),
+                    state_spinner_task.upload_speed_kb.load(Ordering::Relaxed) as f64 / 1024.0
+                );
+            } else {
+                print!(
+                    "\r{}% {}",
+                    state_spinner_task
+                        .uploaded_bytes_total
+                        .load(Ordering::Relaxed)
+                        * 100
+                        / file_size_spinner_task,
+                    SPINNER_FRAMES[frame_idx],
+                );
+            }
 
             if let Err(e) = stdout().flush() {
                 eprintln!("Failed to flush stdout: {}", e);
