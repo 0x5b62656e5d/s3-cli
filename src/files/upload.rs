@@ -20,7 +20,7 @@ use tree_magic::from_u8;
 
 const CHUNK_SIZE: u64 = 1024 * 1024 * 10; // 10 MB
 const MAX_CHUNKS: u64 = 10000;
-const SPINNER_FRAMES: &'static [&'static str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 /// Uploads a file to an S3 bucket at the specified key (path).
 /// # Arguments

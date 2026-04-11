@@ -29,10 +29,10 @@ pub async fn download_file(
 
     create_dir_all(location.clone()).await?;
 
-    if override_filename.is_none() {
-        write_to_file(&mut out.body, location, key).await?;
+    if let Some(filename) = override_filename {
+        write_to_file(&mut out.body, location.clone(), filename).await?;
     } else {
-        write_to_file(&mut out.body, location.clone(), override_filename.unwrap()).await?;
+        write_to_file(&mut out.body, location, key).await?;
     }
 
     Ok(())
