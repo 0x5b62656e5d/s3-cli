@@ -63,4 +63,9 @@ COMMANDS
         Downloads a file from a bucket to a given location (optionally rename it)
     files upload <bucket_name> <file_location> [-o <override_uploaded_filename>]
         Uploads a file into a bucket (optionally rename it)
+
+    multipart list <bucket_name>
+        Lists all multipart uploads in a bucket
+    multipart delete <bucket_name> <file_key> <timestamp_id>
+        Deletes a multipart upload in a bucket
 ```
