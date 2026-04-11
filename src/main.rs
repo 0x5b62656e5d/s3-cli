@@ -83,12 +83,32 @@ async fn main() -> Result<()> {
 
                 println!("{}", list_files(&client, &bucket).await?);
             }
-            FileCommands::Delete { bucket, key, force } => {
+            FileCommands::Delete {
+                bucket,
+                key,
+                force,
+                yes,
+            } => {
                 let client: Client = build_client(
                     &config.default,
                     get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
                 )
                 .await?;
+
+                if yes {
+                    delete_file(
+                        &client,
+                        bucket,
+                        key.clone(),
+                        !config.default.endpoint_url.contains("cloudflare"),
+                        force,
+                    )
+                    .await?;
+
+                    println!("Deleted {:?} successfully", key.clone());
+
+                    return Ok(());
+                }
 
                 match Confirm::new(&format!(
                     "Are you sure you want to delete the file {:?} from bucket {:?}? (y/n)",

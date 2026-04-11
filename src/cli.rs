@@ -55,6 +55,9 @@ pub enum FileCommands {
 
         #[arg(short, long)]
         force: bool,
+
+        #[arg(short, long)]
+        yes: bool,
     },
     Download {
         #[arg(required = true)]
