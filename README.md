@@ -6,6 +6,16 @@ A simple CLI tool to manage S3 buckets and files from the terminal
 
 ### Install
 
+#### Prerequisites
+
+- Cargo
+
+<br>
+
+Run `cargo install pepper-s3-cli`
+
+OR
+
 1. Clone this repository
     a. `git clone https://github.com/0x5b62656e5d/s3-cli` or `gh repo clone 0x5b62656e5d/s3-cli`
 2. Install the binary to path

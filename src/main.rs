@@ -143,19 +143,13 @@ async fn main() -> Result<()> {
                 )
                 .await?;
 
-                if override_filename.is_none() {
-                    upload_file(
-                        &client,
-                        bucket,
-                        location.clone().split('/').next_back().unwrap().to_string(),
-                        location.clone(),
-                    )
-                    .await?;
+                if let Some(filename) = override_filename {
+                    upload_file(&client, bucket, filename, location.clone()).await?;
                 } else {
                     upload_file(
                         &client,
                         bucket,
-                        override_filename.unwrap(),
+                        location.clone().split('/').next_back().unwrap().to_string(),
                         location.clone(),
                     )
                     .await?;
