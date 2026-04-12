@@ -35,6 +35,21 @@ secret_key = "Secret Key"
 endpoint_url = "Endpoint URL"
 ```
 
+Users who wish to save different S3-compatible configurations can do so by adding a new record
+in `config.toml`. For example:
+
+```toml
+[default]
+key_id = "Key ID"
+secret_key = "Secret Key"
+endpoint_url = "Endpoint URL"
+
+[R2]
+key_id = "Key ID"
+secret_key = "Secret Key"
+endpoint_url = "Endpoint URL"
+```
+
 > [!NOTE]
 > If AWS S3 is being used, make sure to leave `endpoint_url` blank. `endpoint_url` is only required for non-AWS S3 users.
 
@@ -72,4 +87,9 @@ COMMANDS
         Deletes a multipart upload in a bucket
     multipart delete <bucket_name> <-a | --all>
         Deletes all multipart upload in a bucket
+
+    provider set <provider_name>
+        Sets the desired S3-compatible provider based on config.toml
+    provider get
+        Gets all the S3-compatible providers configured in config.toml
 ```

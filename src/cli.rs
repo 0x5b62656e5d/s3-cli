@@ -21,6 +21,10 @@ pub enum Commands {
         #[command(subcommand)]
         commands: MultpartCommands,
     },
+    Provider {
+        #[command(subcommand)]
+        commands: ProviderCommands,
+    },
     Init {},
 }
 
@@ -105,5 +109,14 @@ pub enum MultpartCommands {
     List {
         #[arg(required = true)]
         bucket: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ProviderCommands {
+    Get,
+    Set {
+        #[arg(required = true)]
+        provider_name: String,
     },
 }

@@ -1,14 +1,15 @@
 use crate::{
     buckets::{create::create_bucket, delete::delete_bucket, list_buckets::list_buckets},
-    cli::{BucketCommands, Cli, Commands, FileCommands, MultpartCommands},
+    cli::{BucketCommands, Cli, Commands, FileCommands, MultpartCommands, ProviderCommands},
     client::{
-        config::{Config, Regions, get_config, get_regions, init_config},
+        config::{Config, Keys, Regions, get_config, get_regions, init_config},
         init::init_regions,
         s3_client::build_client,
     },
     files::{
         delete::delete_file, download::download_file, list_files::list_files, upload::upload_file,
     },
+    misc::provider::{get_provider, set_provider},
     multipart::delete::{delete_all_multipart_uploads, delete_multipart_upload},
     util::get_bucket_region,
 };
@@ -21,6 +22,7 @@ mod buckets;
 mod cli;
 mod client;
 mod files;
+mod misc;
 mod multipart;
 mod util;
 
@@ -28,10 +30,17 @@ mod util;
 async fn main() -> Result<()> {
     init_config()?;
 
-    let config: Config = get_config()?;
+    let mut config: Config = get_config()?;
     let mut regions: Regions = get_regions()?;
 
-    let default_client: Client = build_client(&config.default, "us-east-1".to_string()).await?;
+    let cloned_config: Config = config.clone();
+
+    let provider: &Keys = cloned_config
+        .providers
+        .get(&config.current_provider)
+        .ok_or_else(|| anyhow::anyhow!("Active provider not found in config"))?;
+
+    let default_client: Client = build_client(provider, "us-east-1".to_string()).await?;
 
     let cli: Cli = Cli::parse();
 
@@ -47,7 +56,7 @@ async fn main() -> Result<()> {
             }
             BucketCommands::Delete { name } => {
                 let client: Client = build_client(
-                    &config.default,
+                    provider,
                     get_bucket_region(&mut regions, name.clone(), &default_client).await?,
                 )
                 .await?;
@@ -76,7 +85,7 @@ async fn main() -> Result<()> {
         Commands::Files { commands } => match commands {
             FileCommands::List { bucket } => {
                 let client: Client = build_client(
-                    &config.default,
+                    provider,
                     get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
                 )
                 .await?;
@@ -90,7 +99,7 @@ async fn main() -> Result<()> {
                 yes,
             } => {
                 let client: Client = build_client(
-                    &config.default,
+                    provider,
                     get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
                 )
                 .await?;
@@ -100,7 +109,7 @@ async fn main() -> Result<()> {
                         &client,
                         bucket,
                         key.clone(),
-                        !config.default.endpoint_url.contains("cloudflare"),
+                        !provider.endpoint_url.contains("cloudflare"),
                         force,
                     )
                     .await?;
@@ -126,7 +135,7 @@ async fn main() -> Result<()> {
                             &client,
                             bucket,
                             key.clone(),
-                            !config.default.endpoint_url.contains("cloudflare"),
+                            !provider.endpoint_url.contains("cloudflare"),
                             force,
                         )
                         .await?;
@@ -145,7 +154,7 @@ async fn main() -> Result<()> {
                 override_filename,
             } => {
                 let client: Client = build_client(
-                    &config.default,
+                    provider,
                     get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
                 )
                 .await?;
@@ -161,7 +170,7 @@ async fn main() -> Result<()> {
                 verbose,
             } => {
                 let client: Client = build_client(
-                    &config.default,
+                    provider,
                     get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
                 )
                 .await?;
@@ -193,7 +202,7 @@ async fn main() -> Result<()> {
                 timestamp_id,
             } => {
                 let client: Client = build_client(
-                    &config.default,
+                    provider,
                     get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
                 )
                 .await?;
@@ -207,7 +216,7 @@ async fn main() -> Result<()> {
             }
             MultpartCommands::List { bucket } => {
                 let client: Client = build_client(
-                    &config.default,
+                    provider,
                     get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
                 )
                 .await?;
@@ -218,8 +227,17 @@ async fn main() -> Result<()> {
                 );
             }
         },
+        Commands::Provider { commands } => match commands {
+            ProviderCommands::Get => {
+                get_provider(&config)?;
+            }
+            ProviderCommands::Set { provider_name } => {
+                set_provider(&mut config, provider_name)?;
+                init_regions(provider).await?;
+            }
+        },
         Commands::Init {} => {
-            init_regions().await?;
+            init_regions(provider).await?;
         }
     }
 
