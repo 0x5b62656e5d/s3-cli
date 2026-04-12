@@ -2018,7 +2018,7 @@ dependencies = [
 
 [[package]]
 name = "pepper-s3-cli"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -2032,6 +2032,7 @@ dependencies = [
  "tabled",
  "tokio",
  "toml",
+ "toml_edit 0.25.11+spec-1.1.0",
  "tree_magic",
  "walkdir",
 ]
@@ -2114,7 +2115,7 @@ version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edce586971a4dfaa28950c6f18ed55e0406c1ab88bbce2c6f6293a7aaba73d35"
 dependencies = [
- "toml_edit",
+ "toml_edit 0.22.27",
 ]
 
 [[package]]
@@ -3015,6 +3016,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml_edit"
+version = "0.25.11+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b59c4d22ed448339746c59b905d24568fcbb3ab65a500494f7b8c3e97739f2b"
+dependencies = [
+ "indexmap 2.14.0",
+ "toml_datetime 1.1.1+spec-1.1.0",
+ "toml_parser",
+ "toml_writer",
+ "winnow 1.0.1",
+]
+
+[[package]]
 name = "toml_parser"
 version = "1.1.2+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3568,6 +3582,9 @@ name = "winnow"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09dac053f1cd375980747450bfc7250c264eaae0583872e845c0c7cd578872b5"
+dependencies = [
+ "memchr 2.7.5",
+]
 
 [[package]]
 name = "wit-bindgen"

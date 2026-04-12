@@ -1,18 +1,19 @@
 use crate::{
-    client::config::{self, save_regions},
-    client::s3_client::build_client,
+    client::{
+        config::{self, Keys, save_regions},
+        s3_client::build_client,
+    },
     util::get_bucket_region,
 };
 
 /// Initializes the regions file by fetching the regions of all existing buckets using the default client configuration.
 /// # Returns
 /// * `Result<(), anyhow::Error>` - `Ok(())` if successful, error if the operation fails
-pub async fn init_regions() -> Result<(), anyhow::Error> {
-    let config: config::Config = config::get_config()?;
+pub async fn init_regions(provider: &Keys) -> Result<(), anyhow::Error> {
     let mut regions: config::Regions = config::get_regions()?;
 
     let default_client: aws_sdk_s3::Client =
-        build_client(&config.default, "us-east-1".to_string()).await?;
+        build_client(provider, "us-east-1".to_string()).await?;
 
     let buckets = default_client.list_buckets().send().await?;
     for b in buckets.buckets().iter() {

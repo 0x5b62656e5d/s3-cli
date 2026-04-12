@@ -2,13 +2,16 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, env, fs, path::PathBuf};
 use toml;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 /// Configuration structure for S3 CLI
 pub struct Config {
-    pub default: Keys,
+    pub current_provider: String,
+
+    #[serde(flatten)]
+    pub providers: HashMap<String, Keys>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 /// Keys structure containing S3 credentials and URL endpoint
 pub struct Keys {
     pub key_id: String,
@@ -63,7 +66,9 @@ pub fn init_config() -> Result<(), anyhow::Error> {
     {
         fs::write(
             config_dir.join("config.toml"),
-            r#"[default]
+            r#"current_provider = "default"
+
+[default]
 key_id = ""
 secret_key = ""
 endpoint_url = ""
