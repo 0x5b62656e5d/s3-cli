@@ -30,17 +30,26 @@ pub enum Commands {
 
 #[derive(Subcommand, Debug)]
 pub enum BucketCommands {
-    List,
+    List {
+        #[arg(short, long)]
+        custom_provider: Option<String>,
+    },
     Create {
         #[arg(required = true)]
         name: String,
 
         #[arg(required = true)]
         region: String,
+
+        #[arg(short, long)]
+        custom_provider: Option<String>,
     },
     Delete {
         #[arg(required = true)]
         name: String,
+
+        #[arg(short, long)]
+        custom_provider: Option<String>,
     },
 }
 
@@ -49,6 +58,9 @@ pub enum FileCommands {
     List {
         #[arg()]
         bucket: String,
+
+        #[arg(short, long)]
+        custom_provider: Option<String>,
     },
     Delete {
         #[arg(required = true)]
@@ -56,6 +68,9 @@ pub enum FileCommands {
 
         #[arg()]
         key: String,
+
+        #[arg(short, long)]
+        custom_provider: Option<String>,
 
         #[arg(short, long)]
         force: bool,
@@ -74,6 +89,9 @@ pub enum FileCommands {
         location: String,
 
         #[arg(short, long)]
+        custom_provider: Option<String>,
+
+        #[arg(short, long)]
         override_filename: Option<String>,
     },
     Upload {
@@ -85,6 +103,9 @@ pub enum FileCommands {
 
         #[arg(short, long)]
         override_filename: Option<String>,
+
+        #[arg(short, long)]
+        custom_provider: Option<String>,
 
         #[arg(short, long, default_value = "false")]
         verbose: bool,
@@ -100,6 +121,9 @@ pub enum MultpartCommands {
         #[arg(short, long)]
         all: bool,
 
+        #[arg(short, long)]
+        custom_provider: Option<String>,
+
         #[arg(required_unless_present = "all", conflicts_with = "all")]
         key: Option<String>,
 
@@ -109,6 +133,9 @@ pub enum MultpartCommands {
     List {
         #[arg(required = true)]
         bucket: String,
+
+        #[arg(short, long)]
+        custom_provider: Option<String>,
     },
 }
 
