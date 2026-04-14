@@ -67,8 +67,10 @@ COMMANDS
         Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
     buckets create <bucket_name> <bucket_region> [-c | --custom-provider]
         Creates a bucket
+        Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
     buckets delete <bucket_name> [-c | --custom-provider]
-        Deletes a bucket        Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
+        Deletes a bucket
+        Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
 
     files list <bucket_name> [-c | --custom-provider]
         Lists all the files in a bucket
