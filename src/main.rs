@@ -35,29 +35,63 @@ async fn main() -> Result<()> {
 
     let cloned_config: Config = config.clone();
 
-    let provider: &Keys = cloned_config
+    let mut provider: &Keys = cloned_config
         .providers
         .get(&config.current_provider)
         .ok_or_else(|| anyhow::anyhow!("Active provider not found in config"))?;
 
-    let default_client: Client = build_client(provider, "us-east-1".to_string()).await?;
+    let mut client: Client = build_client(provider, "us-east-1".to_string()).await?;
 
     let cli: Cli = Cli::parse();
 
     match cli.command {
         Commands::Buckets { commands } => match commands {
-            BucketCommands::List => {
-                println!("{}", list_buckets(&default_client).await?);
+            BucketCommands::List { custom_provider } => {
+                if let Some(custom_provider_name) = custom_provider {
+                    provider = cloned_config
+                        .providers
+                        .get(&custom_provider_name)
+                        .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
+
+                    client = build_client(provider, "us-east-1".to_string()).await?;
+                }
+
+                println!("{}", list_buckets(&client).await?);
             }
-            BucketCommands::Create { name, region } => {
-                create_bucket(&default_client, name.clone(), region).await?;
+            BucketCommands::Create {
+                name,
+                region,
+                custom_provider,
+            } => {
+                if let Some(custom_provider_name) = custom_provider {
+                    provider = cloned_config
+                        .providers
+                        .get(&custom_provider_name)
+                        .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
+
+                    client = build_client(provider, region.clone()).await?;
+                }
+
+                create_bucket(&client, name.clone(), region).await?;
 
                 println!("Created bucket {:?} successfully", name.clone());
             }
-            BucketCommands::Delete { name } => {
-                let client: Client = build_client(
+            BucketCommands::Delete {
+                name,
+                custom_provider,
+            } => {
+                if let Some(custom_provider_name) = custom_provider {
+                    provider = cloned_config
+                        .providers
+                        .get(&custom_provider_name)
+                        .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
+
+                    client = build_client(provider, "us-east-1".to_string()).await?;
+                }
+
+                client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, name.clone(), &default_client).await?,
+                    get_bucket_region(&mut regions, name.clone(), &client).await?,
                 )
                 .await?;
 
@@ -83,10 +117,22 @@ async fn main() -> Result<()> {
             }
         },
         Commands::Files { commands } => match commands {
-            FileCommands::List { bucket } => {
-                let client: Client = build_client(
+            FileCommands::List {
+                bucket,
+                custom_provider,
+            } => {
+                if let Some(custom_provider_name) = custom_provider {
+                    provider = cloned_config
+                        .providers
+                        .get(&custom_provider_name)
+                        .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
+
+                    client = build_client(provider, "us-east-1".to_string()).await?;
+                }
+
+                client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
+                    get_bucket_region(&mut regions, bucket.clone(), &client).await?,
                 )
                 .await?;
 
@@ -97,10 +143,20 @@ async fn main() -> Result<()> {
                 key,
                 force,
                 yes,
+                custom_provider,
             } => {
-                let client: Client = build_client(
+                if let Some(custom_provider_name) = custom_provider {
+                    provider = cloned_config
+                        .providers
+                        .get(&custom_provider_name)
+                        .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
+
+                    client = build_client(provider, "us-east-1".to_string()).await?;
+                }
+
+                client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
+                    get_bucket_region(&mut regions, bucket.clone(), &client).await?,
                 )
                 .await?;
 
@@ -152,10 +208,20 @@ async fn main() -> Result<()> {
                 key,
                 location,
                 override_filename,
+                custom_provider,
             } => {
-                let client: Client = build_client(
+                if let Some(custom_provider_name) = custom_provider {
+                    provider = cloned_config
+                        .providers
+                        .get(&custom_provider_name)
+                        .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
+
+                    client = build_client(provider, "us-east-1".to_string()).await?;
+                }
+
+                client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
+                    get_bucket_region(&mut regions, bucket.clone(), &client).await?,
                 )
                 .await?;
 
@@ -168,10 +234,20 @@ async fn main() -> Result<()> {
                 location,
                 override_filename,
                 verbose,
+                custom_provider,
             } => {
-                let client: Client = build_client(
+                if let Some(custom_provider_name) = custom_provider {
+                    provider = cloned_config
+                        .providers
+                        .get(&custom_provider_name)
+                        .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
+
+                    client = build_client(provider, "us-east-1".to_string()).await?;
+                }
+
+                client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
+                    get_bucket_region(&mut regions, bucket.clone(), &client).await?,
                 )
                 .await?;
 
@@ -200,10 +276,20 @@ async fn main() -> Result<()> {
                 all,
                 key,
                 timestamp_id,
+                custom_provider,
             } => {
-                let client: Client = build_client(
+                if let Some(custom_provider_name) = custom_provider {
+                    provider = cloned_config
+                        .providers
+                        .get(&custom_provider_name)
+                        .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
+
+                    client = build_client(provider, "us-east-1".to_string()).await?;
+                }
+
+                client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
+                    get_bucket_region(&mut regions, bucket.clone(), &client).await?,
                 )
                 .await?;
 
@@ -214,10 +300,22 @@ async fn main() -> Result<()> {
                         .await?;
                 }
             }
-            MultpartCommands::List { bucket } => {
-                let client: Client = build_client(
+            MultpartCommands::List {
+                bucket,
+                custom_provider,
+            } => {
+                if let Some(custom_provider_name) = custom_provider {
+                    provider = cloned_config
+                        .providers
+                        .get(&custom_provider_name)
+                        .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
+
+                    client = build_client(provider, "us-east-1".to_string()).await?;
+                }
+
+                client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, bucket.clone(), &default_client).await?,
+                    get_bucket_region(&mut regions, bucket.clone(), &client).await?,
                 )
                 .await?;
 
