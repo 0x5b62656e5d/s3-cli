@@ -2018,7 +2018,7 @@ dependencies = [
 
 [[package]]
 name = "pepper-s3-cli"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "anyhow",
  "aws-config",
