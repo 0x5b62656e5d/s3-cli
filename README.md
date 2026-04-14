@@ -62,31 +62,39 @@ COMMANDS
     init
         Initilizes and builds a local map of buckets and their regions for faster access
 
-    buckets list
+    buckets list [-c | --custom-provider]
         Lists buckets associated with the S3 account
-    buckets create <bucket_name> <bucket_region>
+        Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
+    buckets create <bucket_name> <bucket_region> [-c | --custom-provider]
         Creates a bucket
-    buckets delete <bucket_name>
-        Deletes a bucket
+    buckets delete <bucket_name> [-c | --custom-provider]
+        Deletes a bucket        Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
 
-    files list <bucket_name>
+    files list <bucket_name> [-c | --custom-provider]
         Lists all the files in a bucket
-    files delete <bucket_name> <file_name> [-f | --force] [-y | --yes]
+        Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
+    files delete <bucket_name> <file_name> [-f | --force] [-y | --yes] [-c | --custom-provider]
         Deletes a file in a bucket
         Apply the `-f` or `--force` flag to delete all versions of a file (Not supported for R2)
         Apply the `-y` or `--yes` flag to bypass confirmation
-    files download <bucket_name> <file_key> <download_location> [-o <override_downloaded_filename>]
+        Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
+    files download <bucket_name> <file_key> <download_location> [-o <override_downloaded_filename>] [-c | --custom-provider]
         Downloads a file from a bucket to a given location (optionally rename it)
-    files upload <bucket_name> <file_location> [-o <override_uploaded_filename>] [-v | --verbose]
+        Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
+    files upload <bucket_name> <file_location> [-o <override_uploaded_filename>] [-c | --custom-provider] [-v | --verbose]
         Uploads a file into a bucket (optionally rename it)
+        Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
         Apply the `-v` or `--verbose` flag for verbose output
 
-    multipart list <bucket_name>
+    multipart list <bucket_name> [-c | --custom-provider]
         Lists all multipart uploads in a bucket
-    multipart delete <bucket_name> <file_key> <timestamp_id>
+        Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
+    multipart delete <bucket_name> <file_key> <timestamp_id> [-c | --custom-provider]
         Deletes a multipart upload in a bucket
-    multipart delete <bucket_name> <-a | --all>
+        Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
+    multipart delete <bucket_name> <-a | --all> [-c | --custom-provider]
         Deletes all multipart upload in a bucket
+        Use the `-c` or `--custom-provider` flag to specify which S3-compatible provider to use
 
     provider set <provider_name>
         Sets the desired S3-compatible provider based on config.toml
