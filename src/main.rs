@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
     let mut regions: Regions = get_regions()?;
 
     let cloned_config: Config = config.clone();
-    
+
     let mut current_provider: String = config.clone().current_provider;
 
     let mut provider: &Keys = cloned_config
@@ -89,13 +89,14 @@ async fn main() -> Result<()> {
                         .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
 
                     client = build_client(provider, "us-east-1".to_string()).await?;
-                    
+
                     current_provider = custom_provider_name.clone();
                 }
 
                 client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, name.clone(), &client, &current_provider).await?,
+                    get_bucket_region(&mut regions, name.clone(), &client, &current_provider)
+                        .await?,
                 )
                 .await?;
 
@@ -132,13 +133,14 @@ async fn main() -> Result<()> {
                         .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
 
                     client = build_client(provider, "us-east-1".to_string()).await?;
-                    
+
                     current_provider = custom_provider_name.clone();
                 }
 
                 client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, bucket.clone(), &client, &current_provider).await?,
+                    get_bucket_region(&mut regions, bucket.clone(), &client, &current_provider)
+                        .await?,
                 )
                 .await?;
 
@@ -158,13 +160,14 @@ async fn main() -> Result<()> {
                         .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
 
                     client = build_client(provider, "us-east-1".to_string()).await?;
-                    
+
                     current_provider = custom_provider_name.clone();
                 }
 
                 client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, bucket.clone(), &client, &current_provider).await?,
+                    get_bucket_region(&mut regions, bucket.clone(), &client, &current_provider)
+                        .await?,
                 )
                 .await?;
 
@@ -225,13 +228,14 @@ async fn main() -> Result<()> {
                         .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
 
                     client = build_client(provider, "us-east-1".to_string()).await?;
-                    
+
                     current_provider = custom_provider_name.clone();
                 }
 
                 client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, bucket.clone(), &client, &current_provider).await?,
+                    get_bucket_region(&mut regions, bucket.clone(), &client, &current_provider)
+                        .await?,
                 )
                 .await?;
 
@@ -253,13 +257,14 @@ async fn main() -> Result<()> {
                         .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
 
                     client = build_client(provider, "us-east-1".to_string()).await?;
-                    
+
                     current_provider = custom_provider_name.clone();
                 }
 
                 client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, bucket.clone(), &client, &current_provider).await?,
+                    get_bucket_region(&mut regions, bucket.clone(), &client, &current_provider)
+                        .await?,
                 )
                 .await?;
 
@@ -297,13 +302,14 @@ async fn main() -> Result<()> {
                         .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
 
                     client = build_client(provider, "us-east-1".to_string()).await?;
-                    
+
                     current_provider = custom_provider_name.clone();
                 }
 
                 client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, bucket.clone(), &client, &current_provider).await?,
+                    get_bucket_region(&mut regions, bucket.clone(), &client, &current_provider)
+                        .await?,
                 )
                 .await?;
 
@@ -325,13 +331,14 @@ async fn main() -> Result<()> {
                         .ok_or_else(|| anyhow::anyhow!("Custom provider not found in config"))?;
 
                     client = build_client(provider, "us-east-1".to_string()).await?;
-                    
+
                     current_provider = custom_provider_name.clone();
                 }
 
                 client = build_client(
                     provider,
-                    get_bucket_region(&mut regions, bucket.clone(), &client, &current_provider).await?,
+                    get_bucket_region(&mut regions, bucket.clone(), &client, &current_provider)
+                        .await?,
                 )
                 .await?;
 
