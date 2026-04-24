@@ -45,12 +45,14 @@ where
 /// * `regions` - A mutable reference to the `Regions` struct containing cached bucket regions
 /// * `bucket` - The name of the bucket
 /// * `client` - A reference to the S3 client
+/// * `provider_name` - The name of the provider to use for caching the region
 /// # Returns
 /// * `Result<String, anyhow::Error>` - The region of the bucket if successful, error if the operation fails
 pub async fn get_bucket_region(
     regions: &mut Regions,
     bucket: String,
     client: &Client,
+    provider_name: &str,
 ) -> Result<String, anyhow::Error> {
     if let Some(region) = regions.buckets.get(bucket.as_str()) {
         Ok(region.clone())
@@ -67,11 +69,15 @@ pub async fn get_bucket_region(
             Some(other) => other.as_str().to_string(),
         };
 
-        regions
-            .buckets
-            .insert(bucket.clone().to_string(), region.clone());
+        let cloned_region: String = region.clone();
 
-        save_regions(regions)?;
+        let region_key: String = format!("{}#{}", provider_name, bucket);
+
+        if !regions.buckets.contains_key(region_key.as_str()) {
+            regions.buckets.insert(region_key, cloned_region);
+
+            save_regions(regions)?;
+        }
 
         Ok(region)
     }
